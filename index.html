@@ -38,6 +38,7 @@
   <symbol id="i-cog" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM21 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/></symbol>
 </svg>
 
@@ -52,10 +53,9 @@
 <div id="app">
   <header class="top">
     <div class="brand"><img src="assets/pulse-logo-v5.png" alt="Pulse Media Player" class="wordmark"></div>
-    <div class="hdr-icons" aria-hidden="true">
-      <span class="hicon glass"><svg class="ic"><use href="#i-cog"/></svg></span>
-      <span class="hicon glass"><svg class="ic"><use href="#i-info"/></svg></span>
-      <span class="hicon glass"><svg class="ic"><use href="#i-sun"/></svg></span>
+    <div class="hdr-icons">
+      <button class="hicon glass" id="btnSettings" aria-label="Settings"><svg class="ic"><use href="#i-cog"/></svg></button>
+      <button class="hicon glass" id="btnAbout" aria-label="About"><svg class="ic"><use href="#i-info"/></svg></button>
     </div>
   </header>
 
@@ -120,8 +120,7 @@
           <p>Import songs or a whole folder from your device. They’re saved on this device, so they play offline.</p>
         </div>
 
-        <button class="link-danger" id="btnClear" hidden>Clear library</button>
-      </div>
+              </div>
     </section>
   </main>
 
@@ -153,6 +152,72 @@
       <button class="btn danger" value="ok" id="confirmOk">Delete</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="settingsSheet" class="sheet tall" aria-label="Settings">
+  <div class="sheet-head"><h3>Settings</h3><button class="ctl small" id="settingsClose" aria-label="Close"><svg class="ic sm"><use href="#i-x"/></svg></button></div>
+
+  <h4 class="set-sec">Appearance</h4>
+  <div class="set-row">
+    <div class="lbl"><b>Theme</b><i>Light and dark mode are coming soon</i></div>
+    <div class="seg dormant" aria-disabled="true"><button disabled>Auto</button><button disabled>Light</button><button disabled class="on">Dark</button></div>
+  </div>
+  <div class="set-row">
+    <div class="lbl"><b>Blurred artwork background</b><i>Soft glow from the current cover</i></div>
+    <label class="switch"><input type="checkbox" id="setBlur"><span></span></label>
+  </div>
+
+  <h4 class="set-sec">Library</h4>
+  <div class="set-row">
+    <div class="lbl"><b>Sort songs by</b></div>
+    <select class="sel" id="setSort" aria-label="Sort songs by">
+      <option value="title">Title</option><option value="artist">Artist</option><option value="album">Album</option><option value="added">Date added</option>
+    </select>
+  </div>
+  <div class="set-row">
+    <div class="lbl"><b>Storage</b><i id="setStorage">…</i></div>
+  </div>
+  <div class="set-row solo" id="clearRow" hidden><button class="btn danger" id="btnClear">Clear library</button></div>
+
+  <h4 class="set-sec">Playback</h4>
+  <div class="set-row">
+    <div class="lbl"><b>Resume where I left off</b><i>Reopen on your last song and position</i></div>
+    <label class="switch"><input type="checkbox" id="setResume"><span></span></label>
+  </div>
+  <div class="set-row">
+    <div class="lbl"><b>Start with shuffle on</b></div>
+    <label class="switch"><input type="checkbox" id="setShuffle"><span></span></label>
+  </div>
+  <div class="set-row">
+    <div class="lbl"><b>Start with repeat</b></div>
+    <div class="seg" id="setRepeat"><button data-val="off">Off</button><button data-val="all">All</button><button data-val="one">One</button></div>
+  </div>
+  <div class="set-row">
+    <div class="lbl"><b>Sleep timer</b><i id="sleepSub">Off</i></div>
+    <select class="sel" id="setSleep" aria-label="Sleep timer">
+      <option value="0">Off</option><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option>
+    </select>
+  </div>
+</dialog>
+
+<dialog id="aboutSheet" class="sheet tall" aria-label="About">
+  <div class="sheet-head"><h3>About</h3><button class="ctl small" id="aboutClose" aria-label="Close"><svg class="ic sm"><use href="#i-x"/></svg></button></div>
+  <div class="about-logo"><img src="assets/pulse-logo-v5.png" alt="Pulse Media Player"></div>
+  <p class="about-ver">Version 1.0 · Developed by Last Dulani</p>
+
+  <h4 class="set-sec">Privacy</h4>
+  <p>Your music never leaves this device. There are no accounts, no tracking and no uploads. Songs are copied into this app’s private storage and play offline.</p>
+
+  <h4 class="set-sec">Getting started</h4>
+  <ul class="about-list">
+    <li><b>Add music:</b> Library, then Import songs or Import folder. On iPhone, tap Browse to reach On My iPhone or iCloud Drive.</li>
+    <li><b>Install:</b> iPhone, Share then Add to Home Screen. Android, menu then Install app. PC, the install icon in the address bar.</li>
+    <li><b>Formats:</b> MP3, FLAC, WAV and M4A.</li>
+    <li><b>Offline:</b> after the first load, Pulse opens with no internet.</li>
+  </ul>
+
+  <h4 class="set-sec">Credits</h4>
+  <p>Typeface: Outfit, used under the SIL Open Font License 1.1.</p>
 </dialog>
 
 <div id="toast" role="status" aria-live="polite"></div>

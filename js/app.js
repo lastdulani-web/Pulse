@@ -12,6 +12,29 @@ let tracks = [];
 let query = '';
 let dragging = false;
 
+/* ---------- settings (saved on this device) ---------- */
+const DEFAULTS = { bgBlur: true, sort: 'title', resume: true, shuffleDefault: false, repeatDefault: 'off' };
+const settings = { ...DEFAULTS };
+try { Object.assign(settings, JSON.parse(localStorage.getItem('pulse.settings') || '{}')); } catch {}
+if (!['title', 'artist', 'album', 'added'].includes(settings.sort)) settings.sort = 'title';
+if (!['off', 'all', 'one'].includes(settings.repeatDefault)) settings.repeatDefault = 'off';
+const saveSettings = () => { try { localStorage.setItem('pulse.settings', JSON.stringify(settings)); } catch {} };
+
+const cmp = (a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: 'base', numeric: true });
+const byField = (f) => (a, b) => {
+  const x = f(a), y = f(b);
+  if (!x && y) return 1;       // blanks go last
+  if (x && !y) return -1;
+  return cmp(x, y) || cmp(a.title, b.title);
+};
+function sortTracks(arr) {
+  const k = settings.sort;
+  arr.sort(k === 'added' ? (a, b) => b.addedAt - a.addedAt
+    : k === 'artist' ? byField((t) => t.artist)
+    : k === 'album' ? byField((t) => t.album)
+    : (a, b) => cmp(a.title, b.title));
+}
+
 /* ---------- helpers ---------- */
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ext = (name) => (name.split('.').pop() || '').toLowerCase();
@@ -58,7 +81,8 @@ $('#miniMain').addEventListener('click', () => showView('now'));
 
 /* ---------- library ---------- */
 async function refreshLibrary() {
-  tracks = (await db.getAllTracks()).sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true }));
+  tracks = await db.getAllTracks();
+  sortTracks(tracks);
   P.setCatalog(tracks);
   renderLibrary();
 }
@@ -79,7 +103,7 @@ function renderLibrary() {
   const total = tracks.reduce((n, t) => n + (t.size || 0), 0);
   $('#libStats').textContent = tracks.length ? `${tracks.length} song${tracks.length === 1 ? '' : 's'} · ${fmtBytes(total)}` : '0 songs';
   $('#empty').hidden = tracks.length > 0;
-  $('#btnClear').hidden = tracks.length === 0;
+  $('#clearRow').hidden = tracks.length === 0;
   $('#list').innerHTML = shown.map((t) => `
     <li class="row" data-id="${t.id}">
       <button class="row-main">
@@ -129,6 +153,7 @@ $('#btnClear').addEventListener('click', async () => {
     await db.clearAll();
     P.clearAll();
     await refreshLibrary();
+    updateStorage();
     toast('Library cleared');
   }
 });
@@ -198,7 +223,7 @@ function renderTrack() {
   img.alt = art ? `Cover art for ${t.title}` : 'Pulse';
   const bg = $('#bgart');
   bg.style.backgroundImage = art ? `url("${art}")` : '';
-  bg.classList.toggle('on', !!art);
+  bg.classList.toggle('on', !!art && settings.bgBlur);
   $('#mini').hidden = !t;
   $('#miniTitle').textContent = t ? t.title : '';
   $('#miniArtist').textContent = t ? (t.artist || 'Unknown artist') : '';
@@ -274,12 +299,76 @@ if (P.volumeSupported) {
 }
 
 /* close the confirm dialog when the backdrop is clicked */
-$('#confirm').addEventListener('click', (e) => { if (e.target.id === 'confirm') e.target.close(); });
+['confirm', 'settingsSheet', 'aboutSheet'].forEach((id) => $(`#${id}`).addEventListener('click', (e) => { if (e.target.id === id) e.target.close(); }));
 
 /* desktop keyboard: space = play/pause */
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Space' && !/INPUT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)) { e.preventDefault(); P.toggle(); }
 });
+
+/* ---------- settings + about sheets ---------- */
+let sleepTimer = null, sleepAt = 0, sleepMin = 0;
+
+function syncSleep() {
+  $('#setSleep').value = String(sleepMin);
+  $('#sleepSub').textContent = sleepAt
+    ? `Playback stops at ${new Date(sleepAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    : 'Off';
+}
+function endSleep(announce) {
+  clearTimeout(sleepTimer); sleepTimer = null; sleepAt = 0; sleepMin = 0;
+  if (announce) { P.audio.pause(); toast('Sleep timer: playback stopped', 4000); }
+  syncSleep();
+}
+function startSleep(min) {
+  endSleep(false);
+  if (!min) return;
+  sleepMin = min;
+  sleepAt = Date.now() + min * 60000;
+  sleepTimer = setTimeout(() => endSleep(true), min * 60000);
+  syncSleep();
+}
+// Backup check while audio is playing (timers can be slowed down in the background)
+P.on('time', () => { if (sleepAt && Date.now() >= sleepAt) endSleep(true); });
+
+function syncSettingsUI() {
+  $('#setBlur').checked = settings.bgBlur;
+  $('#setResume').checked = settings.resume;
+  $('#setShuffle').checked = settings.shuffleDefault;
+  $('#setSort').value = settings.sort;
+  $$('#setRepeat button').forEach((b) => b.classList.toggle('on', b.dataset.val === settings.repeatDefault));
+  syncSleep();
+}
+
+async function updateStorage() {
+  const total = tracks.reduce((n, t) => n + (t.size || 0), 0);
+  const base = `${tracks.length} song${tracks.length === 1 ? '' : 's'} · ${fmtBytes(total)}`;
+  $('#setStorage').textContent = base;
+  try {
+    const e = await navigator.storage?.estimate?.();
+    if (e && e.quota) $('#setStorage').textContent = `${base} · about ${fmtBytes(Math.max(0, e.quota - e.usage))} free`;
+  } catch {}
+}
+
+$('#btnSettings').addEventListener('click', () => { syncSettingsUI(); updateStorage(); $('#settingsSheet').showModal(); });
+$('#btnAbout').addEventListener('click', () => $('#aboutSheet').showModal());
+$('#settingsClose').addEventListener('click', () => $('#settingsSheet').close());
+$('#aboutClose').addEventListener('click', () => $('#aboutSheet').close());
+
+$('#setBlur').addEventListener('change', (e) => { settings.bgBlur = e.target.checked; saveSettings(); renderTrack(); });
+$('#setResume').addEventListener('change', (e) => { settings.resume = e.target.checked; saveSettings(); });
+$('#setShuffle').addEventListener('change', (e) => { settings.shuffleDefault = e.target.checked; saveSettings(); });
+$('#setSort').addEventListener('change', (e) => { settings.sort = e.target.value; saveSettings(); sortTracks(tracks); renderLibrary(); });
+$('#setRepeat').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  settings.repeatDefault = b.dataset.val; saveSettings(); syncSettingsUI();
+});
+$('#setSleep').addEventListener('change', (e) => startSleep(+e.target.value));
+
+function applyLaunchDefaults() {
+  if (P.S.shuffle !== settings.shuffleDefault) P.setShuffle(settings.shuffleDefault);
+  for (let i = 0; i < 3 && P.S.repeat !== settings.repeatDefault; i++) P.cycleRepeat();
+}
 
 /* ---------- boot ---------- */
 setTimeout(() => {
@@ -291,7 +380,8 @@ setTimeout(() => {
 (async function boot() {
   try {
     await refreshLibrary();
-    await P.restore();
+    await P.restore(settings.resume);
+    applyLaunchDefaults();
   } catch (err) {
     console.error(err);
     toast('Storage isn’t available in this browser mode.', 5000);

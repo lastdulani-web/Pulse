@@ -264,12 +264,13 @@ function save() {
 setInterval(() => { if (!audio.paused) save(); }, 3000);
 window.addEventListener('pagehide', save);
 
-export async function restore() {
+export async function restore(resume = true) {
   initSession();
   let st = null;
   try { st = JSON.parse(localStorage.getItem('afrobox.state') || 'null'); } catch {}
   if (!st) return;
   if (volumeSupported && typeof st.vol === 'number') audio.volume = st.vol;
+  if (!resume) { emit('queue'); return; }
   S.shuffle = !!st.shuffle;
   S.repeat = ['off', 'all', 'one'].includes(st.repeat) ? st.repeat : 'off';
   if (st.id != null && S.map.has(st.id)) {
