@@ -28,6 +28,20 @@ function textFrame(body) {
   return decode(body.subarray(1), body[0]).split('\0')[0].trim();
 }
 
+// Unsynchronised lyrics frame (USLT / ULT): encoding, 3-byte language, descriptor, text
+function usltFrame(body) {
+  const enc = body[0];
+  let p = 4;
+  if (enc === 1 || enc === 2) {
+    while (p + 1 < body.length && !(body[p] === 0 && body[p + 1] === 0)) p += 2;
+    p += 2;
+  } else {
+    while (p < body.length && body[p] !== 0) p++;
+    p += 1;
+  }
+  return decode(body.subarray(p), enc).replace(/\0/g, '');
+}
+
 function pictureFrame(body, v2) {
   const enc = body[0];
   let p = 1, mime;
@@ -70,6 +84,7 @@ function parseID3(b) {
     if (id === 'TIT2' || id === 'TT2') out.title = textFrame(body);
     else if (id === 'TPE1' || id === 'TP1') out.artist = textFrame(body);
     else if (id === 'TALB' || id === 'TAL') out.album = textFrame(body);
+    else if ((id === 'USLT' || id === 'ULT') && !out.lyrics) out.lyrics = usltFrame(body);
     else if ((id === 'APIC' || id === 'PIC') && !out.cover) out.cover = pictureFrame(body, ver === 2);
     p = e;
   }
@@ -99,6 +114,7 @@ function parseFlac(b) {
         if (key === 'TITLE') out.title = val;
         else if (key === 'ARTIST') out.artist = val;
         else if (key === 'ALBUM') out.album = val;
+        else if ((key === 'LYRICS' || key === 'UNSYNCEDLYRICS' || key === 'UNSYNCED LYRICS') && !out.lyrics) out.lyrics = val;
       }
     } else if (type === 6 && !out.cover) {
       let o = 4;
@@ -143,6 +159,7 @@ function parseMoov(b) {
     else if (item.type === '\xA9ART') out.artist = clean(utf8.decode(payload));
     else if (item.type === 'aART' && !out.artist) out.artist = clean(utf8.decode(payload));
     else if (item.type === '\xA9alb') out.album = clean(utf8.decode(payload));
+    else if (item.type === '\xA9lyr') out.lyrics = clean(utf8.decode(payload));
     else if (item.type === 'covr') out.cover = { data: payload, mime: flags === 14 ? 'image/png' : 'image/jpeg' };
   }
   return out;
@@ -211,5 +228,54 @@ export async function readMeta(file) {
     artist: m.artist || fb.artist || '',
     album: m.album || '',
     cover,
+    lyrics: parseLyrics(m.lyrics),
   };
+}
+
+/* ---------- Lyrics ---------- */
+// Accepts plain text or LRC text. Returns { synced: [{t, text}] | null, plain } or null.
+const LRC_TIME = /\[(\d{1,3}):(\d{2}(?:[.:]\d{1,3})?)\]/g;
+const LRC_WORD = /<\d{1,3}:\d{2}(?:[.:]\d{1,3})?>/g;
+
+export function parseLyrics(raw) {
+  if (!raw) return null;
+  const text = String(raw).replace(/\r\n?/g, '\n').replace(/^\uFEFF/, '');
+  const off = /\[offset:\s*([+-]?\d+)\s*\]/i.exec(text);
+  const offset = off ? parseInt(off[1], 10) / 1000 : 0;
+  const synced = [];
+  const plain = [];
+  for (const line of text.split('\n')) {
+    const times = [];
+    LRC_TIME.lastIndex = 0;
+    let m;
+    while ((m = LRC_TIME.exec(line))) times.push(parseInt(m[1], 10) * 60 + parseFloat(m[2].replace(':', '.')));
+    const body = line.replace(LRC_TIME, '').replace(LRC_WORD, '').trim();
+    if (times.length) {
+      for (const t of times) synced.push({ t: Math.max(0, t - offset), text: body });
+      plain.push(body);
+    } else if (/^\[[a-z]{2,}:[^\]]*\]$/i.test(line.trim())) {
+      continue; // metadata tag such as [ar:Artist]
+    } else {
+      plain.push(line.trim());
+    }
+  }
+  const plainText = plain.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  if (synced.length >= 2) {
+    synced.sort((a, b) => a.t - b.t);
+    return { synced, plain: plainText };
+  }
+  return plainText ? { synced: null, plain: plainText } : null;
+}
+
+// Reads a .lrc file (UTF-8, UTF-16 or old Windows encodings)
+export async function readLrcFile(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  let s;
+  if (buf[0] === 0xFF && buf[1] === 0xFE) s = u16le.decode(buf.subarray(2));
+  else if (buf[0] === 0xFE && buf[1] === 0xFF) s = u16be.decode(buf.subarray(2));
+  else {
+    s = utf8.decode(buf);
+    if (s.includes('\uFFFD')) s = new TextDecoder('windows-1252').decode(buf);
+  }
+  return parseLyrics(s);
 }

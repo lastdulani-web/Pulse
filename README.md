@@ -49,6 +49,15 @@ Library → Import songs (pick files) or Import folder. On iPhone, tap Browse in
 
 Edit your files, then change `VERSION` in `sw.js` (e.g. `pulse-v8`) and upload again. Phones fetch the new version on their next launch (close and reopen the app once or twice).
 
+
+## New in version 1.1
+
+- **Lyrics:** reads lyrics saved inside MP3, M4A and FLAC files, and synced `.lrc` files. Import an `.lrc` with the song that has the same file name (for example `Artist - Song.mp3` and `Artist - Song.lrc`), or tap Add .lrc file on the lyrics view. On iPhone the file picker may grey out `.lrc` files: use Import folder instead, or the Add .lrc file button.
+- **Visualiser:** bars, wave or circle, with colours taken from the album art. Needs the enhanced audio engine.
+- **Silence trimming and crossfade:** songs are analysed once (at import, or with Analyse now in Settings). Gapless hand-off always works. Crossfade needs the enhanced audio engine.
+- **Volume leveller:** Light, Normal or Strong. Songs that are not analysed yet are levelled live as they play.
+- **Enhanced audio engine:** only starts when crossfade, the leveller or the visualiser is used. If playback ever stops when the phone locks, switch it off in Settings, Advanced, and restart the app.
+
 ## Good to know
 
 - iPhone volume: Safari does not let web apps change volume, so the slider is hidden there and the hardware buttons are used.

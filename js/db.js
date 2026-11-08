@@ -45,6 +45,19 @@ export async function getAllTracks() {
   return wrap(db.transaction('tracks').objectStore('tracks').getAll());
 }
 
+// Merge new fields into an existing track record (lyrics, analysis results...)
+export async function updateTrack(id, patch) {
+  const db = await open();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('tracks', 'readwrite');
+    const store = tx.objectStore('tracks');
+    const req = store.get(id);
+    req.onsuccess = () => { if (req.result) store.put({ ...req.result, ...patch }); };
+    tx.oncomplete = () => resolve();
+    tx.onerror = tx.onabort = () => reject(tx.error);
+  });
+}
+
 export async function getFile(id) {
   const db = await open();
   return wrap(db.transaction('files').objectStore('files').get(id));

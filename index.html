@@ -38,6 +38,9 @@
   <symbol id="i-cog" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></symbol>
+  <symbol id="i-lyrics" viewBox="0 0 24 24"><path d="M4 5h16M4 10h11M4 15h16M4 20h8"/></symbol>
+  <symbol id="i-bars" viewBox="0 0 24 24"><path d="M5 20v-7M10 20V5M15 20v-10M20 20v-5"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM21 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/></symbol>
 </svg>
@@ -63,8 +66,31 @@
     <!-- NOW PLAYING -->
     <section class="view active" id="view-now" aria-label="Now Playing">
       <div class="np">
-        <div class="art glass">
+        <div class="art glass" id="stage">
           <img id="artImg" alt="Pulse Media Player" class="ph" src="assets/art-tile-v5.png">
+
+          <div class="pane" id="paneLyr" hidden>
+            <div class="lyr-scroll" id="lyrScroll"></div>
+            <div class="pane-msg" id="lyrEmpty" hidden>
+              <p>No lyrics for this song</p>
+              <p class="sub">Import a matching .lrc file with your music, or add one now.</p>
+              <button class="btn glass small" id="btnAddLrc">Add .lrc file</button>
+            </div>
+          </div>
+
+          <div class="pane" id="paneViz" hidden>
+            <canvas id="vizCanvas"></canvas>
+            <div class="pane-msg" id="vizMsg" hidden>
+              <p>The visualiser needs the enhanced audio engine</p>
+              <p class="sub">Turn it on in Settings, under Advanced.</p>
+            </div>
+          </div>
+
+          <div class="stage-tabs" id="stageTabs" role="group" aria-label="Player view">
+            <button data-mode="art" aria-label="Artwork" aria-pressed="true"><svg class="ic sm"><use href="#i-image"/></svg></button>
+            <button data-mode="lyrics" aria-label="Lyrics" aria-pressed="false"><svg class="ic sm"><use href="#i-lyrics"/></svg></button>
+            <button data-mode="viz" aria-label="Visualiser" aria-pressed="false"><svg class="ic sm"><use href="#i-bars"/></svg></button>
+          </div>
         </div>
 
         <div class="titles">
@@ -140,8 +166,9 @@
   </nav>
 </div>
 
-<input type="file" id="fileIn" accept="audio/*,.mp3,.flac,.wav,.m4a" multiple hidden>
+<input type="file" id="fileIn" accept="audio/*,.mp3,.flac,.wav,.m4a,.lrc" multiple hidden>
 <input type="file" id="dirIn" webkitdirectory directory multiple hidden>
+<input type="file" id="lrcIn" hidden>
 
 <dialog id="confirm" class="sheet">
   <form method="dialog">
@@ -198,12 +225,56 @@
       <option value="0">Off</option><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option>
     </select>
   </div>
+
+  <h4 class="set-sec">Sound</h4>
+  <div class="set-row" id="rowCross">
+    <div class="lbl"><b>Crossfade</b><i>Blend one song into the next</i></div>
+    <div class="range-wrap"><input type="range" id="setCross" min="0" max="12" step="1" value="0" aria-label="Crossfade length"><span id="crossVal">Off</span></div>
+  </div>
+  <div class="set-row">
+    <div class="lbl"><b>Trim silence</b><i>Skip quiet gaps at the start and end of songs</i></div>
+    <label class="switch"><input type="checkbox" id="setTrim"><span></span></label>
+  </div>
+  <div class="set-row stack" id="rowTrimSense">
+    <div class="lbl"><b>Silence sensitivity</b><i>Gentle only cuts true silence. Aggressive also cuts very quiet intros and outros.</i></div>
+    <div class="seg full" id="setTrimSense"><button data-val="gentle">Gentle</button><button data-val="normal">Normal</button><button data-val="aggressive">Aggressive</button></div>
+  </div>
+  <div class="set-row stack" id="rowLevel">
+    <div class="lbl"><b>Volume leveller</b><i>Evens out loud and quiet songs so you rarely touch the volume</i></div>
+    <div class="seg full" id="setLevel"><button data-val="off">Off</button><button data-val="light">Light</button><button data-val="normal">Normal</button><button data-val="strong">Strong</button></div>
+  </div>
+  <div class="set-row">
+    <div class="lbl"><b>Song analysis</b><i id="anStatus">…</i></div>
+    <button class="btn glass small" id="btnScan">Analyse now</button>
+  </div>
+
+  <h4 class="set-sec">Visualiser</h4>
+  <div class="set-row">
+    <div class="lbl"><b>Style</b></div>
+    <div class="seg" id="setVizStyle"><button data-val="bars">Bars</button><button data-val="wave">Wave</button><button data-val="circle">Circle</button></div>
+  </div>
+  <div class="set-row">
+    <div class="lbl"><b>Match artwork colours</b><i>Colours follow the cover of the current song</i></div>
+    <label class="switch"><input type="checkbox" id="setVizColors"><span></span></label>
+  </div>
+
+  <h4 class="set-sec">Lyrics</h4>
+  <div class="set-row">
+    <div class="lbl"><b>Text size</b></div>
+    <div class="seg" id="setLyrSize"><button data-val="s">Small</button><button data-val="m">Medium</button><button data-val="l">Large</button></div>
+  </div>
+
+  <h4 class="set-sec">Advanced</h4>
+  <div class="set-row">
+    <div class="lbl"><b>Enhanced audio engine</b><i id="engSub">Powers crossfade, the leveller and the visualiser</i></div>
+    <label class="switch"><input type="checkbox" id="setEngine"><span></span></label>
+  </div>
 </dialog>
 
 <dialog id="aboutSheet" class="sheet tall" aria-label="About">
   <div class="sheet-head"><h3>About</h3><button class="ctl small" id="aboutClose" aria-label="Close"><svg class="ic sm"><use href="#i-x"/></svg></button></div>
   <div class="about-logo"><img src="assets/pulse-logo-v5.png" alt="Pulse Media Player"></div>
-  <p class="about-ver">Version 1.0 · Developed by Last Dulani</p>
+  <p class="about-ver">Version 1.1 · Developed by Last Dulani</p>
 
   <h4 class="set-sec">Privacy</h4>
   <p>Your music never leaves this device. There are no accounts, no tracking and no uploads. Songs are copied into this app’s private storage and play offline.</p>
@@ -212,6 +283,7 @@
   <ul class="about-list">
     <li><b>Add music:</b> Library, then Import songs or Import folder. On iPhone, tap Browse to reach On My iPhone or iCloud Drive.</li>
     <li><b>Install:</b> iPhone, Share then Add to Home Screen. Android, menu then Install app. PC, the install icon in the address bar.</li>
+    <li><b>Lyrics:</b> Pulse reads lyrics saved inside your songs, and synced .lrc files that share a song’s name. Import them together, or tap Add .lrc file on the lyrics view.</li>
     <li><b>Formats:</b> MP3, FLAC, WAV and M4A.</li>
     <li><b>Offline:</b> after the first load, Pulse opens with no internet.</li>
   </ul>

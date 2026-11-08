@@ -1,5 +1,7 @@
 import * as db from './db.js';
-import { readMeta } from './meta.js';
+import { readMeta, readLrcFile } from './meta.js';
+import { analyseBlob } from './analyse.js';
+import { createViz, extractColors, DEFAULT_COLORS } from './viz.js';
 import * as P from './player.js';
 
 const $ = (s) => document.querySelector(s);
@@ -13,11 +15,20 @@ let query = '';
 let dragging = false;
 
 /* ---------- settings (saved on this device) ---------- */
-const DEFAULTS = { bgBlur: true, sort: 'title', resume: true, shuffleDefault: false, repeatDefault: 'off' };
+const DEFAULTS = {
+  bgBlur: true, sort: 'title', resume: true, shuffleDefault: false, repeatDefault: 'off',
+  engine: true, crossfade: 0, trim: false, trimSense: 'normal', level: 'off',
+  vizStyle: 'bars', vizColors: true, lyrSize: 'm',
+};
 const settings = { ...DEFAULTS };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('pulse.settings') || '{}')); } catch {}
 if (!['title', 'artist', 'album', 'added'].includes(settings.sort)) settings.sort = 'title';
 if (!['off', 'all', 'one'].includes(settings.repeatDefault)) settings.repeatDefault = 'off';
+if (!['gentle', 'normal', 'aggressive'].includes(settings.trimSense)) settings.trimSense = 'normal';
+if (!['off', 'light', 'normal', 'strong'].includes(settings.level)) settings.level = 'off';
+if (!['bars', 'wave', 'circle'].includes(settings.vizStyle)) settings.vizStyle = 'bars';
+if (!['s', 'm', 'l'].includes(settings.lyrSize)) settings.lyrSize = 'm';
+settings.crossfade = Math.max(0, Math.min(12, Math.round(Number(settings.crossfade) || 0)));
 const saveSettings = () => { try { localStorage.setItem('pulse.settings', JSON.stringify(settings)); } catch {} };
 
 const cmp = (a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: 'base', numeric: true });
@@ -177,21 +188,50 @@ function getDuration(blob) {
   });
 }
 
+const baseName = (n) => n.replace(/\.[^.]+$/, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+async function safeAnalyse(blob, duration) {
+  try {
+    const r = await analyseBlob(blob, duration);
+    return r && !r.skipped ? r : { failed: true };
+  } catch { return { failed: true }; }
+}
+
 async function importFiles(files) {
-  files = files.filter(isAudio);
-  if (!files.length) { toast('No supported audio found. Use MP3, FLAC, WAV or M4A.'); return; }
+  const audioFiles = files.filter(isAudio);
+  const lrcFiles = files.filter((f) => ext(f.name) === 'lrc');
+  if (!audioFiles.length && !lrcFiles.length) { toast('No supported files found. Use MP3, FLAC, WAV, M4A or .lrc.'); return; }
+  const lrcMap = new Map(lrcFiles.map((f) => [baseName(f.name), f]));
+  const usedLrc = new Set();
   const have = new Set(tracks.map((t) => `${t.fileName}|${t.size}`));
-  let added = 0, skipped = 0, failed = 0;
-  for (let i = 0; i < files.length; i++) {
-    const f = files[i];
-    toast(`Importing ${i + 1} of ${files.length}…`, 0);
+  const wantAnalysis = settings.trim || settings.level !== 'off';
+  let added = 0, skipped = 0, failed = 0, withLyrics = 0;
+  for (let i = 0; i < audioFiles.length; i++) {
+    const f = audioFiles[i];
+    toast(`Importing ${i + 1} of ${audioFiles.length}…`, 0);
     if (have.has(`${f.name}|${f.size}`)) { skipped++; continue; }
     try {
       const e = ext(f.name);
       const blob = f.slice(0, f.size, f.type || MIME[e]);
       const [meta, duration] = await Promise.all([readMeta(f), getDuration(blob)]);
+      let lyrics = meta.lyrics;
+      const lf = lrcMap.get(baseName(f.name));
+      if (lf) {
+        usedLrc.add(lf);
+        try {
+          const parsed = await readLrcFile(lf);
+          if (parsed && (parsed.synced || !lyrics)) lyrics = parsed;   // synced beats plain
+        } catch { /* ignore a bad .lrc */ }
+      }
+      if (lyrics) withLyrics++;
+      let an;
+      if (wantAnalysis) {
+        toast(`Analysing ${i + 1} of ${audioFiles.length}…`, 0);
+        an = await safeAnalyse(blob, duration);
+      }
       await db.addTrack({
-        title: meta.title, artist: meta.artist, album: meta.album, cover: meta.cover,
+        title: meta.title, artist: meta.artist, album: meta.album, cover: meta.cover, lyrics,
+        ...(an ? { an } : {}),
         duration, format: e.toUpperCase(), size: f.size, fileName: f.name, addedAt: Date.now(),
       }, blob);
       have.add(`${f.name}|${f.size}`);
@@ -202,11 +242,29 @@ async function importFiles(files) {
     }
   }
   await refreshLibrary();
+
+  // .lrc files that were not imported alongside their song: match against songs already in the library
+  let attached = 0, unmatched = 0;
+  for (const lf of lrcFiles) {
+    if (usedLrc.has(lf)) continue;
+    const tr = tracks.find((x) => baseName(x.fileName || '') === baseName(lf.name));
+    if (!tr) { unmatched++; continue; }
+    try {
+      const parsed = await readLrcFile(lf);
+      if (parsed) { tr.lyrics = parsed; await db.updateTrack(tr.id, { lyrics: parsed }); attached++; }
+    } catch { unmatched++; }
+  }
+  if (attached) { lastTid = null; renderTrack(); }
   db.requestPersistence();
-  const parts = [`Added ${added} song${added === 1 ? '' : 's'}`];
+  updateAnalysisStatus();
+
+  const parts = [];
+  if (audioFiles.length) parts.push(`Added ${added} song${added === 1 ? '' : 's'}`);
   if (skipped) parts.push(`${skipped} already in library`);
   if (failed) parts.push(`${failed} failed (storage may be full)`);
-  toast(parts.join(' · '), 4200);
+  if (withLyrics + attached) parts.push(`${withLyrics + attached} with lyrics`);
+  if (unmatched) parts.push(`${unmatched} .lrc without a matching song`);
+  toast(parts.join(' · '), 5000);
 }
 
 /* ---------- now playing ---------- */
@@ -232,6 +290,13 @@ function renderTrack() {
   document.title = t ? `${t.title} · Pulse` : 'Pulse';
   renderTime();
   markRows();
+  const tid = t ? t.id : null;
+  if (tid !== lastTid) {                 // only when the song actually changes
+    lastTid = tid;
+    renderLyrics();
+    updateColors(art);
+    if (t && !t.an && (settings.trim || settings.level !== 'off')) queueAnalysis(t);
+  }
 }
 
 function renderTime() {
@@ -338,6 +403,7 @@ function syncSettingsUI() {
   $('#setSort').value = settings.sort;
   $$('#setRepeat button').forEach((b) => b.classList.toggle('on', b.dataset.val === settings.repeatDefault));
   syncSleep();
+  syncAdvancedUI();
 }
 
 async function updateStorage() {
@@ -370,6 +436,255 @@ function applyLaunchDefaults() {
   for (let i = 0; i < 3 && P.S.repeat !== settings.repeatDefault; i++) P.cycleRepeat();
 }
 
+/* ---------- Now Playing views: artwork, lyrics, visualiser ---------- */
+let lastTid = null;
+let stageMode = 'art';
+try { const m = localStorage.getItem('pulse.stage'); if (['art', 'lyrics', 'viz'].includes(m)) stageMode = m; } catch {}
+const viz = createViz($('#vizCanvas'));
+let artColors = DEFAULT_COLORS;
+let colorToken = 0;
+const lyr = { lines: [], cur: -1, synced: false };
+let userScrollUntil = 0;
+
+const vizAvailable = () => settings.engine && P.engineSupported();
+
+function applyVizOpts() {
+  viz.set({ style: settings.vizStyle, colors: settings.vizColors ? artColors : DEFAULT_COLORS });
+}
+function applyLyrSize() {
+  $('#stage').style.setProperty('--lyr', { s: '17px', m: '21px', l: '26px' }[settings.lyrSize]);
+}
+async function updateColors(url) {
+  const tok = ++colorToken;
+  const c = url ? await extractColors(url) : DEFAULT_COLORS;
+  if (tok !== colorToken) return;
+  artColors = c;
+  document.documentElement.style.setProperty('--art-c1', c[0]);
+  applyVizOpts();
+}
+
+function setStage(mode, { persist = true, boot = false } = {}) {
+  stageMode = mode;
+  if (persist) { try { localStorage.setItem('pulse.stage', mode); } catch {} }
+  $('#paneLyr').hidden = mode !== 'lyrics';
+  $('#paneViz').hidden = mode !== 'viz';
+  $$('#stageTabs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+  P.setVizWanted(mode === 'viz');
+  if (mode === 'viz') {
+    if (!boot) P.requestEngine();          // a tap is needed before audio can be analysed
+    $('#vizMsg').hidden = vizAvailable();
+    applyVizOpts();
+    if (vizAvailable()) viz.start(); else viz.stop();
+  } else {
+    viz.stop();
+  }
+  if (mode === 'lyrics') updateLyricsCursor(true, true);
+}
+$('#stageTabs').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (b) setStage(b.dataset.mode);
+});
+P.on('state', () => viz.wake());
+
+/* lyrics */
+function renderLyrics() {
+  const t = P.current();
+  const box = $('#lyrScroll');
+  const L = t && t.lyrics;
+  const empty = $('#lyrEmpty');
+  box.innerHTML = '';
+  box.classList.remove('plain');
+  lyr.lines = []; lyr.cur = -1; lyr.synced = false;
+  empty.hidden = true;
+  if (L && L.synced && L.synced.length) {
+    lyr.synced = true;
+    box.innerHTML = L.synced.map((l, i) => `<p class="ln" data-i="${i}">${esc(l.text) || '♪'}</p>`).join('');
+    lyr.lines = [...box.children];
+    updateLyricsCursor(true, true);
+  } else if (L && L.plain) {
+    box.classList.add('plain');
+    box.innerHTML = `<p class="plain-text">${esc(L.plain)}</p>`;
+    box.scrollTop = 0;
+  } else {
+    empty.hidden = false;
+    empty.querySelector('p').textContent = t ? 'No lyrics for this song' : 'Nothing playing';
+    empty.querySelector('.sub').textContent = t
+      ? 'Import a matching .lrc file with your music, or add one now.'
+      : 'Play a song to see its lyrics here.';
+    $('#btnAddLrc').hidden = !t;
+  }
+}
+
+function scrollToLine(i, instant) {
+  const box = $('#lyrScroll');
+  const el = lyr.lines[i];
+  if (!el) return;
+  if (!instant && Date.now() < userScrollUntil) return;      // the listener is scrolling by hand
+  box.scrollTo({ top: el.offsetTop - box.clientHeight / 2 + el.offsetHeight / 2, behavior: instant ? 'auto' : 'smooth' });
+}
+
+function updateLyricsCursor(force, instant) {
+  if (!lyr.synced) return;
+  const t = P.current();
+  const L = t && t.lyrics && t.lyrics.synced;
+  if (!L) return;
+  const now = P.audio.currentTime + 0.25;       // tiny look-ahead so the line lights up as it is sung
+  let lo = 0, hi = L.length - 1, ans = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (L[mid].t <= now) { ans = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  if (ans === lyr.cur && !force) return;
+  lyr.cur = ans;
+  lyr.lines.forEach((el, i) => { el.classList.toggle('cur', i === ans); el.classList.toggle('past', i < ans); });
+  if (ans >= 0 && stageMode === 'lyrics') scrollToLine(ans, instant);
+}
+P.on('time', () => { if (stageMode === 'lyrics') updateLyricsCursor(false); });
+
+$('#lyrScroll').addEventListener('click', (e) => {
+  const p = e.target.closest('.ln');
+  const t = P.current();
+  if (!p || !lyr.synced || !t) return;
+  P.seek(t.lyrics.synced[+p.dataset.i].t);
+  userScrollUntil = 0;
+  updateLyricsCursor(true);
+});
+['wheel', 'touchstart', 'pointerdown'].forEach((ev) => $('#lyrScroll').addEventListener(ev, () => { userScrollUntil = Date.now() + 4000; }, { passive: true }));
+
+$('#btnAddLrc').addEventListener('click', () => $('#lrcIn').click());
+$('#lrcIn').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  const t = P.current();
+  if (!file || !t) return;
+  try {
+    const parsed = await readLrcFile(file);
+    if (!parsed) { toast('That file has no lyrics in it.'); return; }
+    t.lyrics = parsed;
+    await db.updateTrack(t.id, { lyrics: parsed });
+    renderLyrics();
+    toast(parsed.synced ? 'Synced lyrics added' : 'Lyrics added');
+  } catch { toast('Couldn’t read that file.'); }
+});
+
+/* ---------- song analysis (silence trimming + volume leveller) ---------- */
+let analysisChain = Promise.resolve();
+let scanning = false;
+
+function queueAnalysis(t) {
+  if (!t || t.an || t._queued) return analysisChain;
+  t._queued = true;
+  analysisChain = analysisChain.then(async () => {
+    try {
+      const blob = await db.getFile(t.id);
+      if (!blob) return;
+      t.an = await safeAnalyse(blob, t.duration);
+      await db.updateTrack(t.id, { an: t.an });
+      P.reapply();
+      updateAnalysisStatus();
+    } finally { t._queued = false; }
+  });
+  return analysisChain;
+}
+
+function updateAnalysisStatus() {
+  const done = tracks.filter((t) => t.an).length;
+  $('#anStatus').textContent = tracks.length
+    ? `${done} of ${tracks.length} songs analysed. Used by silence trimming and the leveller.`
+    : 'No songs yet';
+  $('#btnScan').disabled = scanning || done === tracks.length;
+}
+
+async function scanLibrary() {
+  const todo = tracks.filter((t) => !t.an);
+  if (scanning || !todo.length) { if (!todo.length) toast('All songs are analysed'); return; }
+  scanning = true;
+  updateAnalysisStatus();
+  for (let i = 0; i < todo.length; i++) {
+    toast(`Analysing ${i + 1} of ${todo.length}…`, 0);
+    await queueAnalysis(todo[i]);
+    await new Promise((r) => setTimeout(r, 30));
+  }
+  scanning = false;
+  updateAnalysisStatus();
+  toast(`Analysed ${todo.length} song${todo.length === 1 ? '' : 's'}`, 3500);
+}
+$('#btnScan').addEventListener('click', scanLibrary);
+
+function analyseCurrentIfNeeded() {
+  const t = P.current();
+  if (t && !t.an && (settings.trim || settings.level !== 'off')) queueAnalysis(t);
+}
+
+/* ---------- audio settings ---------- */
+function applyAudioConfig(gesture) {
+  P.configure({ engine: settings.engine, crossfade: settings.crossfade, trim: settings.trim, trimSense: settings.trimSense, level: settings.level });
+  if (gesture && settings.engine && (settings.crossfade > 0 || settings.level !== 'off' || stageMode === 'viz')) P.requestEngine();
+  syncAdvancedUI();
+}
+
+const segOn = (sel, val) => $$(`${sel} button`).forEach((b) => b.classList.toggle('on', b.dataset.val === String(val)));
+
+function syncAdvancedUI() {
+  $('#setTrim').checked = settings.trim;
+  $('#setEngine').checked = settings.engine;
+  $('#setVizColors').checked = settings.vizColors;
+  segOn('#setTrimSense', settings.trimSense);
+  segOn('#setLevel', settings.level);
+  segOn('#setVizStyle', settings.vizStyle);
+  segOn('#setLyrSize', settings.lyrSize);
+  const cross = $('#setCross');
+  cross.value = settings.crossfade;
+  setFill(cross);
+  $('#crossVal').textContent = settings.crossfade ? `${settings.crossfade} s` : 'Off';
+  const eng = vizAvailable();
+  $('#rowCross').classList.toggle('dim', !eng);
+  $('#rowLevel').classList.toggle('dim', !eng);
+  $('#rowTrimSense').classList.toggle('dim', !settings.trim);
+  $('#engSub').textContent = !P.engineSupported()
+    ? 'Not supported by this browser'
+    : settings.engine
+      ? 'Powers crossfade, the leveller and the visualiser'
+      : 'Off. Crossfade, the leveller and the visualiser are unavailable. Restart the app after switching this off.';
+  $('#vizMsg').hidden = eng;
+  updateAnalysisStatus();
+}
+
+function bindSeg(sel, key, after) {
+  $(sel).addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    settings[key] = b.dataset.val;
+    saveSettings();
+    segOn(sel, settings[key]);
+    if (after) after();
+  });
+}
+function bindSwitch(sel, key, after) {
+  $(sel).addEventListener('change', (e) => {
+    settings[key] = e.target.checked;
+    saveSettings();
+    if (after) after();
+  });
+}
+bindSwitch('#setEngine', 'engine', () => { applyAudioConfig(true); if (stageMode === 'viz') setStage('viz', { persist: false }); });
+bindSwitch('#setTrim', 'trim', () => { applyAudioConfig(false); analyseCurrentIfNeeded(); });
+bindSeg('#setTrimSense', 'trimSense', () => applyAudioConfig(false));
+bindSeg('#setLevel', 'level', () => { applyAudioConfig(true); analyseCurrentIfNeeded(); });
+bindSeg('#setVizStyle', 'vizStyle', applyVizOpts);
+bindSwitch('#setVizColors', 'vizColors', applyVizOpts);
+bindSeg('#setLyrSize', 'lyrSize', applyLyrSize);
+$('#setCross').addEventListener('input', (e) => {
+  settings.crossfade = +e.target.value;
+  saveSettings();
+  setFill(e.target);
+  $('#crossVal').textContent = settings.crossfade ? `${settings.crossfade} s` : 'Off';
+  applyAudioConfig(true);
+});
+
+// Phones need one tap before sound can be set up. The first tap anywhere does it.
+['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, () => P.unlock(), { once: true, capture: true }));
+
 /* ---------- boot ---------- */
 setTimeout(() => {
   const s = $('#splash');
@@ -379,6 +694,8 @@ setTimeout(() => {
 
 (async function boot() {
   try {
+    applyLyrSize();
+    applyAudioConfig(false);
     await refreshLibrary();
     await P.restore(settings.resume);
     applyLaunchDefaults();
@@ -387,6 +704,7 @@ setTimeout(() => {
     toast('Storage isn’t available in this browser mode.', 5000);
   }
   renderTrack(); renderState(); renderQueueState();
+  setStage(stageMode, { persist: false, boot: true });
 })();
 
 if ('serviceWorker' in navigator) {
