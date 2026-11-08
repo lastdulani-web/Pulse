@@ -463,6 +463,17 @@ async function updateColors(url) {
   applyVizOpts();
 }
 
+// The switcher fades away while reading lyrics or watching the visualiser; a tap on the card brings it back.
+let tabsTimer = null;
+function wakeTabs() {
+  const st = $('#stage');
+  st.classList.remove('idle');
+  clearTimeout(tabsTimer);
+  if (stageMode !== 'art') tabsTimer = setTimeout(() => st.classList.add('idle'), 3500);
+}
+$('#stage').addEventListener('pointerdown', wakeTabs, { capture: true, passive: true });
+$('#stage').addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') wakeTabs(); }, { passive: true });
+
 function setStage(mode, { persist = true, boot = false } = {}) {
   stageMode = mode;
   if (persist) { try { localStorage.setItem('pulse.stage', mode); } catch {} }
@@ -479,6 +490,7 @@ function setStage(mode, { persist = true, boot = false } = {}) {
     viz.stop();
   }
   if (mode === 'lyrics') updateLyricsCursor(true, true);
+  wakeTabs();
 }
 $('#stageTabs').addEventListener('click', (e) => {
   const b = e.target.closest('button');
@@ -684,6 +696,23 @@ $('#setCross').addEventListener('input', (e) => {
 
 // Phones need one tap before sound can be set up. The first tap anywhere does it.
 ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, () => P.unlock(), { once: true, capture: true }));
+
+/* ---------- iPhone home-screen viewport gap ---------- */
+// On some iPhones an installed web app is laid out about 47px short of the real screen height,
+// leaving an unpainted strip under the bottom bar. Measure it, then let the CSS paint into it.
+function updateViewportGap() {
+  let gap = 0;
+  if (navigator.standalone === true && window.innerHeight > window.innerWidth) {
+    const expected = Math.max(screen.width, screen.height);
+    gap = expected - window.innerHeight;
+    if (!(gap > 8 && gap <= 90)) gap = 0;
+  }
+  document.documentElement.style.setProperty('--vgap', `${gap}px`);
+  document.documentElement.classList.toggle('vgap', gap > 0);
+}
+updateViewportGap();
+window.addEventListener('resize', updateViewportGap);
+window.addEventListener('orientationchange', () => setTimeout(updateViewportGap, 300));
 
 /* ---------- boot ---------- */
 setTimeout(() => {

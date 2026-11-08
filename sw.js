@@ -1,6 +1,6 @@
 // Pulse service worker: cache the app shell so the app opens fully offline.
 // Bump VERSION whenever you change any file, so phones pick up the update.
-const VERSION = 'pulse-v11';
+const VERSION = 'pulse-v12';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest',
   'css/styles.css',

@@ -15,7 +15,8 @@
   --glass-hi:rgba(246,236,221,.10);
   --stroke:rgba(246,236,221,.12);
   --safe-t:env(safe-area-inset-top,0px);
-  --safe-b:env(safe-area-inset-bottom,0px);
+  --vgap:0px;
+  --safe-b:max(0px,calc(env(safe-area-inset-bottom,0px) - var(--vgap,0px)));
   --serif:Rockwell,"Roboto Slab","Zilla Slab","Rockwell Nova",Georgia,serif;
   --sans:"Outfit",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
 }
@@ -43,7 +44,7 @@ ul,ol{list-style:none}
 .ic.big{width:56px;height:56px;stroke-width:1.2;color:var(--accent)}
 
 /* Background */
-#bg{position:fixed;inset:0;z-index:0;overflow:hidden;
+#bg{position:fixed;inset:0 0 calc(var(--vgap,0px) * -1) 0;z-index:0;overflow:hidden;
   background:
     radial-gradient(95% 55% at 14% -6%,rgba(215,38,30,.46),transparent 70%),
     radial-gradient(70% 38% at 92% -4%,rgba(215,38,30,.20),transparent 70%),
@@ -52,6 +53,8 @@ ul,ol{list-style:none}
 #bgart{position:absolute;inset:-12%;background-size:cover;background-position:center;filter:blur(54px) saturate(1.5) brightness(.6);opacity:0;transition:opacity .8s ease}
 #bgart.on{opacity:.85}
 #bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(13,13,14,.06),rgba(13,13,14,.80))}
+
+html.vgap #bg::after{background:linear-gradient(180deg,rgba(13,13,14,.06),rgba(13,13,14,.80) 70%,var(--onyx) 100%)}
 
 /* Splash */
 #splash{position:fixed;inset:0;z-index:100;background:#161616;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;transition:opacity .5s ease,visibility .5s}
@@ -203,19 +206,24 @@ dialog::backdrop{background:rgba(0,0,0,.55);-webkit-backdrop-filter:blur(6px);ba
 /* Now Playing views: artwork / lyrics / visualiser */
 #stage{position:relative;box-shadow:inset 0 1px 0 rgba(246,236,221,.2),0 20px 44px -20px rgba(0,0,0,.75),0 0 70px -24px var(--art-c1,transparent);transition:box-shadow .6s}
 .pane{position:absolute;inset:7px;border-radius:25px;overflow:hidden;background:rgba(13,13,14,.86);-webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px)}
-.lyr-scroll{position:absolute;inset:0;overflow-y:auto;padding:34% 20px 42%;text-align:center;-webkit-mask-image:linear-gradient(transparent,#000 14%,#000 78%,transparent);mask-image:linear-gradient(transparent,#000 14%,#000 78%,transparent)}
-.lyr-scroll.plain{padding:28px 22px 96px;text-align:left}
+.lyr-scroll{position:absolute;inset:0;overflow-y:auto;padding:34% 20px 34%;text-align:center;-webkit-mask-image:linear-gradient(transparent,#000 14%,#000 78%,transparent);mask-image:linear-gradient(transparent,#000 14%,#000 78%,transparent)}
+.lyr-scroll.plain{padding:28px 22px 60px;text-align:left}
 .ln{margin:0 0 .75em;font-size:var(--lyr,21px);line-height:1.3;font-weight:600;color:rgba(246,236,221,.36);cursor:pointer;transition:color .3s,transform .3s}
 .ln.past{color:rgba(246,236,221,.52)}
 .ln.cur{color:var(--cream);transform:scale(1.04)}
 .plain-text{margin:0;white-space:pre-wrap;font-size:calc(var(--lyr,21px) * .82);line-height:1.55;font-weight:400;color:var(--cream)}
-.pane-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:0 28px 56px;text-align:center}
+.pane-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:0 28px 28px;text-align:center}
 .pane-msg p{margin:0;font-size:15px}
 .pane-msg .sub{color:var(--muted);font-size:13px;line-height:1.45}
 #vizCanvas{position:absolute;inset:0;width:100%;height:100%;display:block}
-.stage-tabs{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);display:flex;gap:4px;padding:4px;border-radius:999px;background:rgba(13,13,14,.62);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border:1px solid var(--stroke);z-index:2}
-.stage-tabs button{width:40px;height:34px;border-radius:999px;display:grid;place-items:center;color:var(--muted);transition:background .2s,color .2s}
+.stage-tabs{position:absolute;right:14px;bottom:14px;display:flex;gap:2px;padding:3px;border-radius:999px;background:rgba(13,13,14,.62);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border:1px solid var(--stroke);z-index:2;transition:opacity .35s ease}
+.stage-tabs button{position:relative;width:32px;height:28px;border-radius:999px;display:grid;place-items:center;color:var(--muted);transition:background .2s,color .2s}
+.stage-tabs button::after{content:"";position:absolute;inset:-6px -2px}   /* bigger invisible tap area */
+.stage-tabs .ic{width:16px;height:16px}
+#stage.idle .stage-tabs{opacity:0;pointer-events:none}
+#stage.idle .stage-tabs:focus-within{opacity:1;pointer-events:auto}
 .stage-tabs button[aria-pressed="true"]{background:var(--accent);color:var(--cream)}
+@media (min-width:900px){.stage-tabs{left:50%;right:auto;transform:translateX(-50%);gap:4px;padding:4px}.stage-tabs button{width:40px;height:34px}.stage-tabs .ic{width:18px;height:18px}}
 @media (hover:hover){.stage-tabs button:hover{color:var(--cream)}.ln:hover{color:rgba(246,236,221,.8)}}
 
 /* Extra settings controls */

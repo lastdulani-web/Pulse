@@ -116,7 +116,7 @@ export function createViz(canvas) {
     const [c1, c2] = opts.colors;
     const n = Math.max(24, Math.min(48, Math.floor(W / 11)));
     smoothBars(bands(an, n));
-    const padB = Math.min(70, H * 0.2);
+    const padB = Math.min(36, H * 0.1);
     const maxH = H - padB - H * 0.08;
     const gap = Math.max(2, W * 0.008);
     const bw = (W - gap * (n + 1)) / n;
@@ -139,7 +139,7 @@ export function createViz(canvas) {
   function drawWave(an) {
     const [c1, c2] = opts.colors;
     an.getByteTimeDomainData(wave);
-    const cy = (H - Math.min(70, H * 0.2)) / 2 + H * 0.04;
+    const cy = (H - Math.min(36, H * 0.1)) / 2 + H * 0.04;
     const amp = H * 0.3;
     const grad = g.createLinearGradient(0, 0, W, 0);
     grad.addColorStop(0, c1);
