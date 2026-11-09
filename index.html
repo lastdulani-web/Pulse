@@ -71,9 +71,11 @@
 
           <div class="pane" id="paneLyr" hidden>
             <div class="lyr-scroll" id="lyrScroll"></div>
+            <button class="pane-btn" id="btnSync" hidden>Sync</button>
             <div class="pane-msg" id="lyrEmpty" hidden>
               <p>No lyrics for this song</p>
               <p class="sub">Import a matching .lrc file with your music, or add one now.</p>
+              <button class="btn primary small" id="btnSyncEmpty">Create synced lyrics</button>
               <button class="btn glass small" id="btnAddLrc">Add .lrc file</button>
             </div>
           </div>
@@ -263,6 +265,10 @@
     <div class="lbl"><b>Text size</b></div>
     <div class="seg" id="setLyrSize"><button data-val="s">Small</button><button data-val="m">Medium</button><button data-val="l">Large</button></div>
   </div>
+  <div class="set-row stack">
+    <div class="lbl"><b>Sync tap offset</b><i>Taps land a little after the word is sung. This takes that delay off each time you stamp a line in Sync.</i></div>
+    <div class="seg full" id="setSyncLag"><button data-val="0">None</button><button data-val="0.1">0.1 s</button><button data-val="0.2">0.2 s</button><button data-val="0.3">0.3 s</button></div>
+  </div>
 
   <h4 class="set-sec">Advanced</h4>
   <div class="set-row">
@@ -283,7 +289,7 @@
   <ul class="about-list">
     <li><b>Add music:</b> Library, then Import songs or Import folder. On iPhone, tap Browse to reach On My iPhone or iCloud Drive.</li>
     <li><b>Install:</b> iPhone, Share then Add to Home Screen. Android, menu then Install app. PC, the install icon in the address bar.</li>
-    <li><b>Lyrics:</b> Pulse reads lyrics saved inside your songs, and synced .lrc files that share a song’s name. Import them together, or tap Add .lrc file on the lyrics view.</li>
+    <li><b>Lyrics:</b> Pulse reads lyrics saved inside your songs, and synced .lrc files that share a song’s name. Import them together, or tap Add .lrc file on the lyrics view. To make your own, tap Sync on the lyrics view, paste your lyrics and tap along as the song plays. You can save the result to the song or export an .lrc file.</li>
     <li><b>Formats:</b> MP3, FLAC, WAV and M4A.</li>
     <li><b>Offline:</b> after the first load, Pulse opens with no internet.</li>
   </ul>
@@ -292,8 +298,87 @@
   <p>Typeface: Outfit, used under the SIL Open Font License 1.1.</p>
 </dialog>
 
+<dialog id="syncSheet" class="sheet tall sync" aria-label="Sync lyrics">
+  <div class="sheet-head"><h3>Sync lyrics</h3><button class="ctl small" id="syncClose" aria-label="Close"><svg class="ic sm"><use href="#i-x"/></svg></button></div>
+  <p class="sy-song" id="sySong"></p>
+  <p class="sy-warn" id="syWarn" hidden>The song changed. Close this and open Sync again on the song you want.</p>
+
+  <div id="syStepText">
+    <p class="sy-help">Paste or type the lyrics, one line per line. Blank lines and labels like [Chorus] are skipped. Then play the song and tap as each line starts.</p>
+    <textarea id="syText" spellcheck="false" placeholder="Paste your lyrics here"></textarea>
+    <div class="sy-actions">
+      <button class="btn glass small" id="syLoad">Load .txt or .lrc</button>
+      <button class="btn primary" id="syStart">Start syncing</button>
+    </div>
+  </div>
+
+  <div id="syStepTap" hidden>
+    <div class="sy-bar">
+      <button class="btn glass small" id="syBack">Edit text</button>
+      <span id="syClock">0:00 / 0:00</span>
+    </div>
+    <ol class="sy-list" id="syList"></ol>
+    <div class="sy-nudge" id="syNudge" hidden>
+      <button class="btn glass small" data-act="-0.1">−0.1 s</button>
+      <button class="btn glass small" data-act="+0.1">+0.1 s</button>
+      <button class="btn glass small" data-act="now">Set to now</button>
+      <button class="btn glass small" data-act="clear">Clear</button>
+    </div>
+    <p class="sy-next" id="syNext"></p>
+    <button class="sy-tap" id="syTap">TAP</button>
+    <div class="sy-row">
+      <button class="btn glass small" id="syPlay">Play</button>
+      <button class="btn glass small" id="syRew">−5 s</button>
+      <button class="btn glass small" id="syRestart">Restart</button>
+      <button class="btn glass small" id="syUndo">Undo</button>
+    </div>
+    <div class="sy-row">
+      <button class="btn primary small" id="sySave">Save to song</button>
+      <button class="btn glass small" id="syExport">Export .lrc</button>
+    </div>
+  </div>
+  <input type="file" id="syFile" hidden>
+</dialog>
+
 <div id="toast" role="status" aria-live="polite"></div>
 
+<script>
+/* Safety net: the splash always leaves after 2 seconds, and if the app has not started
+   by 4.5 seconds a "Refresh the app" button appears. Songs are never touched. */
+(function () {
+  function hideSplash() {
+    var s = document.getElementById('splash');
+    if (!s) return;
+    s.classList.add('hide');
+    setTimeout(function () { if (s.parentNode) s.parentNode.removeChild(s); }, 600);
+  }
+  setTimeout(hideSplash, 2000);
+  function refresh() {
+    var jobs = [];
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+        return Promise.all(rs.map(function (r) { return r.unregister(); }));
+      }));
+    }
+    if (window.caches) {
+      jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
+    }
+    Promise.all(jobs).catch(function () {}).then(function () { location.reload(); });
+  }
+  setTimeout(function () {
+    if (window.__pulseReady) return;
+    var box = document.createElement('div');
+    box.style.cssText = 'position:fixed;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);z-index:200;max-width:420px;margin:0 auto;padding:16px;border-radius:20px;background:#1c1c1e;color:#F6ECDD;font:15px/1.4 system-ui,sans-serif;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.6);border:1px solid rgba(246,236,221,.18)';
+    box.innerHTML = '<p style="margin:0 0 12px">Pulse did not start properly. Part of the app stored on this device may be out of date. Your songs are safe.</p>';
+    var b = document.createElement('button');
+    b.textContent = 'Refresh the app';
+    b.style.cssText = 'font:inherit;font-weight:600;color:#F6ECDD;background:#D7261E;border:0;border-radius:14px;padding:12px 22px';
+    b.onclick = refresh;
+    box.appendChild(b);
+    document.body.appendChild(box);
+  }, 4500);
+})();
+</script>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>

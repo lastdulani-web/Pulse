@@ -53,6 +53,7 @@ Edit your files, then change `VERSION` in `sw.js` (e.g. `pulse-v8`) and upload a
 ## New in version 1.1
 
 - **Lyrics:** reads lyrics saved inside MP3, M4A and FLAC files, and synced `.lrc` files. Import an `.lrc` with the song that has the same file name (for example `Artist - Song.mp3` and `Artist - Song.lrc`), or tap Add .lrc file on the lyrics view. On iPhone the file picker may grey out `.lrc` files: use Import folder instead, or the Add .lrc file button.
+- **Sync lyrics:** tap Sync on the lyrics view, paste your lyrics, play the song and tap as each line starts. Fine-tune any line, then save it to the song or export an `.lrc` file (named after the song file so it matches when imported).
 - **Visualiser:** bars, wave or circle, with colours taken from the album art. Needs the enhanced audio engine.
 - **Silence trimming and crossfade:** songs are analysed once (at import, or with Analyse now in Settings). Gapless hand-off always works. Crossfade needs the enhanced audio engine.
 - **Volume leveller:** Light, Normal or Strong. Songs that are not analysed yet are levelled live as they play.

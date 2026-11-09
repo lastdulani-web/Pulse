@@ -733,6 +733,7 @@ window.addEventListener('orientationchange', () => setTimeout(updateViewportGap,
 /* ---------- boot ---------- */
 setTimeout(() => {
   const s = $('#splash');
+  if (!s) return;               // the page's safety net may already have removed it
   s.classList.add('hide');
   setTimeout(() => s.remove(), 600);
 }, 2000);
@@ -755,3 +756,5 @@ setTimeout(() => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(console.error));
 }
+
+window.__pulseReady = true;   // the page's safety net checks for this
