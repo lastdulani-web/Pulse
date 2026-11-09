@@ -2,6 +2,7 @@ import * as db from './db.js';
 import { readMeta, readLrcFile } from './meta.js';
 import { analyseBlob } from './analyse.js';
 import { createViz, extractColors, DEFAULT_COLORS } from './viz.js';
+import { initSync } from './sync.js';
 import * as P from './player.js';
 
 const $ = (s) => document.querySelector(s);
@@ -18,7 +19,7 @@ let dragging = false;
 const DEFAULTS = {
   bgBlur: true, sort: 'title', resume: true, shuffleDefault: false, repeatDefault: 'off',
   engine: true, crossfade: 0, trim: false, trimSense: 'normal', level: 'off',
-  vizStyle: 'bars', vizColors: true, lyrSize: 'm',
+  vizStyle: 'bars', vizColors: true, lyrSize: 'm', syncLag: '0.2',
 };
 const settings = { ...DEFAULTS };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('pulse.settings') || '{}')); } catch {}
@@ -28,6 +29,8 @@ if (!['gentle', 'normal', 'aggressive'].includes(settings.trimSense)) settings.t
 if (!['off', 'light', 'normal', 'strong'].includes(settings.level)) settings.level = 'off';
 if (!['bars', 'wave', 'circle'].includes(settings.vizStyle)) settings.vizStyle = 'bars';
 if (!['s', 'm', 'l'].includes(settings.lyrSize)) settings.lyrSize = 'm';
+if (!['0', '0.1', '0.2', '0.3'].includes(String(settings.syncLag))) settings.syncLag = '0.2';
+settings.syncLag = String(settings.syncLag);
 settings.crossfade = Math.max(0, Math.min(12, Math.round(Number(settings.crossfade) || 0)));
 const saveSettings = () => { try { localStorage.setItem('pulse.settings', JSON.stringify(settings)); } catch {} };
 
@@ -508,6 +511,7 @@ function renderLyrics() {
   box.classList.remove('plain');
   lyr.lines = []; lyr.cur = -1; lyr.synced = false;
   empty.hidden = true;
+  $('#btnSync').hidden = !t;
   if (L && L.synced && L.synced.length) {
     lyr.synced = true;
     box.innerHTML = L.synced.map((l, i) => `<p class="ln" data-i="${i}">${esc(l.text) || '♪'}</p>`).join('');
@@ -524,6 +528,7 @@ function renderLyrics() {
       ? 'Import a matching .lrc file with your music, or add one now.'
       : 'Play a song to see its lyrics here.';
     $('#btnAddLrc').hidden = !t;
+    $('#btnSyncEmpty').hidden = !t;
   }
 }
 
@@ -578,6 +583,15 @@ $('#lrcIn').addEventListener('change', async (e) => {
     toast(parsed.synced ? 'Synced lyrics added' : 'Lyrics added');
   } catch { toast('Couldn’t read that file.'); }
 });
+
+/* ---------- sync lyrics (make an .lrc) ---------- */
+const sync = initSync({
+  $, P, db, toast, esc, ask,
+  getLag: () => parseFloat(settings.syncLag) || 0,
+  afterSave: () => { lastTid = null; renderTrack(); setStage('lyrics'); },
+});
+$('#btnSync').addEventListener('click', () => sync.open());
+$('#btnSyncEmpty').addEventListener('click', () => sync.open());
 
 /* ---------- song analysis (silence trimming + volume leveller) ---------- */
 let analysisChain = Promise.resolve();
@@ -645,6 +659,7 @@ function syncAdvancedUI() {
   segOn('#setLevel', settings.level);
   segOn('#setVizStyle', settings.vizStyle);
   segOn('#setLyrSize', settings.lyrSize);
+  segOn('#setSyncLag', settings.syncLag);
   const cross = $('#setCross');
   cross.value = settings.crossfade;
   setFill(cross);
@@ -686,6 +701,7 @@ bindSeg('#setLevel', 'level', () => { applyAudioConfig(true); analyseCurrentIfNe
 bindSeg('#setVizStyle', 'vizStyle', applyVizOpts);
 bindSwitch('#setVizColors', 'vizColors', applyVizOpts);
 bindSeg('#setLyrSize', 'lyrSize', applyLyrSize);
+bindSeg('#setSyncLag', 'syncLag');
 $('#setCross').addEventListener('input', (e) => {
   settings.crossfade = +e.target.value;
   saveSettings();

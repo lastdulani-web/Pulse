@@ -237,6 +237,34 @@ dialog::backdrop{background:rgba(0,0,0,.55);-webkit-backdrop-filter:blur(6px);ba
 .dim{opacity:.4}
 .dim input,.dim button{pointer-events:none}
 
+/* Lyrics sync tool */
+.pane-btn{position:absolute;top:12px;right:12px;z-index:2;padding:7px 14px;border-radius:999px;font-size:13px;font-weight:600;color:var(--cream);background:rgba(13,13,14,.62);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border:1px solid var(--stroke);transition:opacity .35s}
+#stage.idle .pane-btn{opacity:0;pointer-events:none}
+.sheet.sync{height:88dvh;overflow:hidden}
+.sheet.sync[open]{display:flex;flex-direction:column}
+.sy-song{margin:0 0 8px!important;font-size:13px}
+.sy-warn{margin:0 0 8px!important;padding:8px 12px;border-radius:12px;background:rgba(215,38,30,.18);color:var(--cream)!important;font-size:13px}
+.sy-help{margin:0 0 10px!important}
+#syStepText,#syStepTap{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px}
+#syStepText[hidden],#syStepTap[hidden]{display:none}
+#syText{flex:1;min-height:160px;resize:none;width:100%;background:var(--glass-hi);color:var(--text);border:1px solid var(--stroke);border-radius:16px;padding:14px;font:inherit;font-size:15px;line-height:1.5}
+#syText::placeholder{color:var(--muted)}
+.sy-actions,.sy-row,.sy-nudge{display:flex;gap:8px}
+.sy-actions .btn.primary{flex:1}
+.sy-row .btn,.sy-nudge .btn{flex:1;padding:0 6px}
+.sy-bar{display:flex;align-items:center;justify-content:space-between}
+#syClock{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.sy-list{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.sy-line{display:flex;align-items:center;gap:8px;padding:0 6px;border-radius:12px}
+.sy-time{flex:none;width:72px;padding:9px 0;text-align:left;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.sy-text{flex:1;padding:9px 0;text-align:left;font-size:15px;line-height:1.35;color:var(--cream)}
+.sy-line.next{background:rgba(215,38,30,.16);box-shadow:inset 0 0 0 1px rgba(215,38,30,.55)}
+.sy-line.sel{background:var(--glass-hi);box-shadow:inset 0 0 0 1px var(--stroke)}
+.sy-line.playing .sy-text{color:var(--accent);font-weight:600}
+.sy-next{margin:0!important;min-height:2.6em;font-size:13px;line-height:1.35}
+.sy-tap{flex:none;height:76px;border-radius:22px;background:var(--accent);color:var(--cream);font-size:20px;font-weight:700;letter-spacing:.08em;box-shadow:0 0 22px rgba(215,38,30,.45);touch-action:manipulation;-webkit-user-select:none;user-select:none}
+.sy-tap:active{transform:scale(.98)}
+
 /* Toast */
 #toast{position:fixed;left:50%;bottom:calc(var(--safe-b) + 150px);transform:translate(-50%,12px);z-index:60;max-width:min(88vw,420px);padding:11px 18px;border-radius:999px;font-size:14px;background:rgba(40,40,42,.85);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid var(--stroke);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;text-align:center}
 #toast.show{opacity:1;transform:translate(-50%,0)}

@@ -279,3 +279,20 @@ export async function readLrcFile(file) {
   }
   return parseLyrics(s);
 }
+
+// Builds the text of an .lrc file from timed lines: [{ t: seconds, text }]
+export function formatLrc(lines, info = {}) {
+  const out = [];
+  if (info.title) out.push(`[ti:${info.title}]`);
+  if (info.artist) out.push(`[ar:${info.artist}]`);
+  if (info.album) out.push(`[al:${info.album}]`);
+  out.push('[by:Pulse Media Player]');
+  for (const l of lines) {
+    const cs = Math.round(Math.max(0, l.t) * 100);
+    const mm = Math.floor(cs / 6000);
+    const ss = Math.floor((cs % 6000) / 100);
+    const c = cs % 100;
+    out.push(`[${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}.${String(c).padStart(2, '0')}]${l.text}`);
+  }
+  return out.join('\n') + '\n';
+}
