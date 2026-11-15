@@ -89,6 +89,7 @@ function ask(title, text, okLabel = 'Delete') {
 function showView(name) {
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
   $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === name));
+  updateLayout();
 }
 $$('.tab').forEach((t) => t.addEventListener('click', () => showView(t.dataset.view)));
 $('#miniMain').addEventListener('click', () => showView('now'));
@@ -466,6 +467,17 @@ async function updateColors(url) {
   applyVizOpts();
 }
 
+// Lyrics view on phones: a taller lyric window with the controls and tabs moved to the sides
+const narrowScreen = window.matchMedia('(max-width: 899px)');
+function updateLayout() {
+  const on = stageMode === 'lyrics' && $('#view-now').classList.contains('active') && narrowScreen.matches;
+  const app = $('#app');
+  if (app.classList.contains('lyric-layout') === on) return;
+  app.classList.toggle('lyric-layout', on);
+  requestAnimationFrame(() => { if (on) updateLyricsCursor(true, true); });   // re-centre the current line in the bigger window
+}
+if (narrowScreen.addEventListener) narrowScreen.addEventListener('change', updateLayout);
+
 // The switcher fades away while reading lyrics or watching the visualiser; a tap on the card brings it back.
 let tabsTimer = null;
 function wakeTabs() {
@@ -493,6 +505,7 @@ function setStage(mode, { persist = true, boot = false } = {}) {
     viz.stop();
   }
   if (mode === 'lyrics') updateLyricsCursor(true, true);
+  updateLayout();
   wakeTabs();
 }
 $('#stageTabs').addEventListener('click', (e) => {
