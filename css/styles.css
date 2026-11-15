@@ -247,13 +247,13 @@ dialog::backdrop{background:rgba(0,0,0,.55);-webkit-backdrop-filter:blur(6px);ba
   #app.lyric-layout .titles h1{font-size:17px}
   #app.lyric-layout .titles p{font-size:13px;margin-top:2px}
   #app.lyric-layout .seek{grid-area:seek;padding-top:6px}
-  #app.lyric-layout .controls{grid-area:rail;align-self:start;flex-direction:column;justify-content:flex-start;gap:4px;margin-top:4px}
+  #app.lyric-layout .controls{grid-column:1;grid-row:3;align-self:start;flex-direction:column;justify-content:flex-start;gap:4px;margin-top:-8px}
   #app.lyric-layout .controls .ctl{width:44px;height:44px}
   #app.lyric-layout .controls .ctl .ic{width:22px;height:22px}
   #app.lyric-layout .controls .ctl.play{width:52px;height:52px}
   #app.lyric-layout .controls .ctl.play .ic{width:26px;height:26px}
   #app.lyric-layout .volume,#app.lyric-layout .vol-note{display:none}
-  #app.lyric-layout .nav{grid-area:rail;align-self:end;margin:0;padding:6px;display:flex;flex-direction:column;gap:6px;border-radius:22px}
+  #app.lyric-layout .nav{grid-column:1;grid-row:3;align-self:end;margin:0;padding:6px;display:flex;flex-direction:column;gap:6px;border-radius:22px}
   #app.lyric-layout .tab{width:44px;height:44px;padding:0}
   #app.lyric-layout .tab span{display:none}
   #app.lyric-layout .mini{display:none!important}
