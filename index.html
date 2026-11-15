@@ -379,6 +379,14 @@
   }, 4500);
 })();
 </script>
+<script>
+document.getElementById('settingsSheet').addEventListener('click', function(e) {
+  if (e.target === this) this.close();
+});
+document.getElementById('aboutSheet').addEventListener('click', function(e) {
+  if (e.target === this) this.close();
+});
+</script>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>
