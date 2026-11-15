@@ -239,30 +239,6 @@ dialog::backdrop{background:rgba(0,0,0,.55);-webkit-backdrop-filter:blur(6px);ba
 
 /* Lyrics layout: the lyric window grows downwards, controls move to the left rail, tabs to the right rail */
 @media (max-width:899px){
-  #app.lyric-layout #stageTabs{
-    position:absolute;
-    left:-58px;
-    bottom:0;
-    top:auto;
-    right:auto;
-    flex-direction:column;
-    gap:4px;
-    background:var(--glass);
-    border-radius:20px;
-    padding:4px;
-  }
-  #app.lyric-layout #paneViz{
-    max-width:320px;
-    max-height:320px;
-    aspect-ratio:1;
-    margin:auto;
-    position:absolute;
-    inset:auto;
-    top:50%;
-    left:50%;
-    transform:translate(-50%,-50%);
-    border-radius:24px;
-  }
   #app.lyric-layout{display:grid;grid-template-columns:56px minmax(0,1fr) 56px;grid-template-rows:auto auto minmax(0,1fr) auto;grid-template-areas:"head head head" "left titles right" "left stage right" "left seek right";column-gap:8px;padding:0 10px calc(var(--safe-b) + 10px)}
   #app.lyric-layout .top{grid-area:head;padding-left:12px;padding-right:12px}
   #app.lyric-layout #views,#app.lyric-layout #view-now,#app.lyric-layout .np{display:contents}
